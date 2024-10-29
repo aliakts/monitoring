@@ -1,0 +1,63 @@
+// Configuration file
+local.file "endpoints" {
+    filename = "/etc/alloy/endpoints.json"
+}
+
+// Metrics scraping
+
+// Scrape the local Alloy itself.
+prometheus.scrape "alloy" {
+    targets = [{"__address__" = "localhost:12345", group = "infrastructure", service = "alloy"}]
+    forward_to = [prometheus.remote_write.mimir.receiver]
+    job_name = "alloy"
+}
+
+// The Alloy exports everything, using an empty block.
+prometheus.exporter.unix "default" {
+}
+
+// This component scrapes the Unix exporter metrics generated above.
+prometheus.scrape "unix" {
+    targets = prometheus.exporter.unix.default.targets
+    forward_to = [prometheus.remote_write.mimir.receiver]
+    job_name = "node_exporter"
+}
+
+// The prometheus.remote_write component defines an endpoint for remotely writing metrics to.
+prometheus.remote_write "mimir" {
+    endpoint {
+        url = json_path(local.file.endpoints.content, ".metrics.url")[0]
+
+        // Basic auth credentials. If the endpoint is not TLS, whilst sent, these will be ignored.
+
+    }
+}
+
+// Logging
+// The Loki receiver is used to ingest logs from the mythical application via Loki's HTTP REST API.
+local.file_match "host_files" {
+    path_targets = [{"__path__" = "/var/log/host/*log"}]
+    sync_period = "5s"
+}
+
+loki.source.file "log_scrape" {
+  targets    = local.file_match.host_files.targets
+  forward_to = [loki.process.filter_logs.receiver]
+  tail_from_end = true
+}
+
+loki.process "filter_logs" {
+    stage.drop {
+        source = ""
+        expression  = ".*Connection closed by authenticating user root"
+        drop_counter_reason = "noisy"
+      }
+    forward_to = [loki.write.grafana_loki.receiver]
+    }
+
+loki.write "grafana_loki" {
+    // Output the Loki log to the local Loki instance.
+    endpoint {
+        url = json_path(local.file.endpoints.content, ".logs.url")[0]
+    }
+}
