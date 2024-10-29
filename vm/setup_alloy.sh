@@ -172,7 +172,6 @@ Restart=always
 User=alloy
 Environment=HOSTNAME=%H
 Environment=ALLOY_DEPLOY_MODE=deb
-EnvironmentFile=/etc/default/alloy
 WorkingDirectory=/var/lib/alloy
 ExecStart=/usr/local/bin/alloy run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data --stability.level=public-preview /etc/alloy/config.alloy
 ExecReload=/usr/bin/env kill -HUP \$MAINPID
